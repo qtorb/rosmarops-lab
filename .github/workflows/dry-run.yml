@@ -5,9 +5,15 @@ name: Sandbox captures, dry run (no keys)
 # the agents are installed and their versions read, but never called. It
 # checks the test account (sysadminctl, or plan B), the template written from
 # the web's data, the key review and freeze. The PNGs stay as a 7-day artifact;
-# no release.
+# no release. It also runs on pull requests that change the lab, with the
+# web commit below, so a change is checked on macos-latest before it merges.
 
 on:
+  pull_request:
+    paths:
+      - "lab/**"
+      - ".github/workflows/dry-run.yml"
+      - ".github/workflows/captures.yml"
   workflow_dispatch:
     inputs:
       web_commit:
@@ -33,7 +39,7 @@ jobs:
         agent: [claude-code, codex]
     env:
       OUT: ${{ github.workspace }}/out
-      WEB_COMMIT: ${{ inputs.web_commit }}
+      WEB_COMMIT: ${{ inputs.web_commit || 'ddd669aebcd531a82c6d3d401b61853be8839b0a' }}
       LAB_DRY_RUN: "1"
     steps:
       - uses: actions/checkout@v4
