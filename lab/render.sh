@@ -8,7 +8,9 @@
 set -euo pipefail
 out=$1
 for txt in "$out"/*.txt; do
-  freeze "$txt" --language txt --theme github-dark --font.size 14 --line-height 1.3 \
-    --wrap 100 --padding 24 --window --border.radius 8 --output "${txt%.txt}.png"
+  # The text goes in through stdin: off a terminal (CI), freeze reads stdin
+  # and ignores a file argument.
+  freeze --language txt --theme github-dark --font.size 14 --line-height 1.3 \
+    --wrap 100 --padding 24 --window --border.radius 8 --output "${txt%.txt}.png" < "$txt"
 done
 ls "$out"/*.png
