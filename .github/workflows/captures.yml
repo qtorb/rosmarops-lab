@@ -1,0 +1,135 @@
+name: Sandbox captures
+
+# BV-250 (CTO-61, Albert 16-11 20:09). Captures of Claude Code and Codex on
+# macOS: the two tests before the template, the template written from the
+# web's published data at a fixed commit, and the two tests after it.
+# - Only workflow_dispatch, and only from main; every capture job waits for
+#   Albert's approval in the lab-captures environment, where the two keys live.
+# - Only `claude -p` and `codex exec` with an ephemeral credential store (PARA 2,
+#   option b): no interactive session, no tmux, no login.
+# - Each key is only in the environment of the two steps that call its agent,
+#   and those steps review every text for the key and its prefixes before any
+#   PNG is drawn.
+# - A last job, with contents: write and no key, publishes the release
+#   lab-AAAAMMDD with manifest.json (SHA-256 of every file).
+
+on:
+  workflow_dispatch:
+    inputs:
+      web_commit:
+        description: "Commit of qtorb/rosmarops-web whose templates are captured (40 characters)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lab-captures
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 20
+    environment: lab-captures
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        agent: [claude-code, codex]
+    env:
+      OUT: ${{ github.workspace }}/out
+      WEB_COMMIT: ${{ inputs.web_commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Tools (freeze, the agent at a fixed version)
+        run: |
+          set -eu
+          go install github.com/charmbracelet/freeze@v0.2.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          if [ "${{ matrix.agent }}" = claude-code ]; then
+            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.311
+            claude --version
+          else
+            npm install -g @openai/codex@0.169.0
+          fi
+
+      - name: Prepare the test account (CTO-61 §2.0)
+        run: lab/prepare.sh
+
+      - name: Versions
+        run: |
+          mkdir -p "$OUT"
+          lab/meta.sh "${{ matrix.agent }}" "$OUT" "$WEB_COMMIT"
+
+      - name: Tests before the template (key in this step only)
+        env:
+          ANTHROPIC_API_KEY: ${{ matrix.agent == 'claude-code' && secrets.ANTHROPIC_API_KEY || '' }}
+          CODEX_API_KEY: ${{ matrix.agent == 'codex' && secrets.CODEX_API_KEY || '' }}
+        run: lab/tests.sh "${{ matrix.agent }}" antes "$OUT"
+
+      - name: Step 1, the template from the web's data
+        run: python3 lab/templates.py "${{ matrix.agent }}" "$WEB_COMMIT" "$LAB_HOME" "$OUT"
+
+      - name: Tests after the template (key in this step only)
+        env:
+          ANTHROPIC_API_KEY: ${{ matrix.agent == 'claude-code' && secrets.ANTHROPIC_API_KEY || '' }}
+          CODEX_API_KEY: ${{ matrix.agent == 'codex' && secrets.CODEX_API_KEY || '' }}
+        run: lab/tests.sh "${{ matrix.agent }}" despues "$OUT"
+
+      - name: PNG from the reviewed texts (no key)
+        run: lab/render.sh "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: captures-${{ matrix.agent }}
+          path: out/
+          retention-days: 7
+
+      - name: Clean up (CTO-61 §2.6)
+        if: always()
+        run: lab/cleanup.sh
+
+  publish:
+    needs: capture
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: captures-*
+          path: out
+          merge-multiple: true
+
+      - name: Review again, manifest and release lab-AAAAMMDD
+        run: |
+          set -eu
+          python3 lab/scan.py out/*.txt out/*.json
+          tag="lab-$(date -u +%Y%m%d)"
+          n=2
+          while gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; do
+            tag="lab-$(date -u +%Y%m%d)-$n"; n=$((n + 1))
+          done
+          python3 lab/manifest.py out "$tag"
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" \
+            --notes "Sandbox captures of Claude Code and Codex on macOS (BV-250). Results and SHA-256 in manifest.json. Templates from qtorb/rosmarops-web@${{ inputs.web_commit }}." \
+            out/*.png out/*.txt out/*-meta.json out/manifest.json

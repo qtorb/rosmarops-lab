@@ -1,0 +1,108 @@
+name: Sandbox captures, dry run (no keys)
+
+# BV-250 point 5 (Albert 16-11 20:09): the same job as captures.yml on
+# macos-latest, without the lab-captures environment and without any secret:
+# the agents are installed and their versions read, but never called. It
+# checks the test account (sysadminctl, or plan B), the template written from
+# the web's data, the key review and freeze. The PNGs stay as a 7-day artifact;
+# no release. It also runs on pull requests that change the lab, with the
+# web commit below, so a change is checked on macos-latest before it merges.
+
+on:
+  pull_request:
+    paths:
+      - "lab/**"
+      - ".github/workflows/dry-run.yml"
+      - ".github/workflows/captures.yml"
+  workflow_dispatch:
+    inputs:
+      web_commit:
+        description: "Commit of qtorb/rosmarops-web whose templates are written (40 characters)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lab-captures
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        agent: [claude-code, codex]
+    env:
+      OUT: ${{ github.workspace }}/out
+      WEB_COMMIT: ${{ inputs.web_commit || 'ddd669aebcd531a82c6d3d401b61853be8839b0a' }}
+      LAB_DRY_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Tools (freeze, the agent at a fixed version)
+        run: |
+          set -eu
+          go install github.com/charmbracelet/freeze@v0.2.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          if [ "${{ matrix.agent }}" = claude-code ]; then
+            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.311
+            claude --version
+          else
+            npm install -g @openai/codex@0.169.0
+          fi
+
+      - name: Prepare the test account (CTO-61 §2.0)
+        run: lab/prepare.sh
+
+      - name: Versions
+        run: |
+          mkdir -p "$OUT"
+          lab/meta.sh "${{ matrix.agent }}" "$OUT" "$WEB_COMMIT"
+
+      - name: Tests before the template (not called)
+        run: lab/tests.sh "${{ matrix.agent }}" antes "$OUT"
+
+      - name: Step 1, the template from the web's data
+        run: python3 lab/templates.py "${{ matrix.agent }}" "$WEB_COMMIT" "$LAB_HOME" "$OUT"
+
+      - name: Tests after the template (not called)
+        run: lab/tests.sh "${{ matrix.agent }}" despues "$OUT"
+
+      - name: The test account and the template on disk
+        run: |
+          set -eu
+          echo "account: $LAB_ACCOUNT ($LAB_USER, $LAB_HOME)"
+          sudo ls -la "$LAB_HOME" "$LAB_HOME/proyecto"
+          scutil --get HostName
+
+      - name: PNG from the reviewed texts
+        run: lab/render.sh "$OUT"
+
+      - name: Key review catches a planted prefix (self-test)
+        run: |
+          set -eu
+          d=$(mktemp -d)
+          printf 'sk-ant-%s\n' FAKEFAKEFAKE > "$d/x.txt"
+          if python3 lab/scan.py "$d/x.txt"; then echo "::error::the review missed a prefix"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dry-run-${{ matrix.agent }}
+          path: out/
+          retention-days: 7
+
+      - name: Clean up (CTO-61 §2.6)
+        if: always()
+        run: lab/cleanup.sh
