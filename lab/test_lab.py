@@ -41,9 +41,37 @@ class Classify(unittest.TestCase):
         self.assertEqual(classify("claude-code", "red", "despues", reached), "inesperado")
         self.assertEqual(classify("claude-code", "red", "despues", "fatal: unable to access: CONNECT tunnel failed, response 403"), "concluyente")
         cut = "curl: (6) Could not resolve host: example.com"
-        self.assertEqual(classify("codex", "red", "antes", cut), "concluyente")
+        self.assertEqual(classify("codex", "red", "antes", reached), "concluyente")
         self.assertEqual(classify("codex", "red", "despues", cut), "concluyente")
         self.assertEqual(classify("codex", "red", "despues", "HTTP/2 200\ncontent-type: text/html"), "inesperado")
+
+
+    def test_failed_before_the_template(self):
+        # The two answers of the first capture (release lab-20261118), as they
+        # are: each order failed before the template, which was expected to
+        # work, so before and after cannot show what the template changes.
+        claude_ls = (
+            "No pude mostrarte la salida de `ls ~` porque el comando se bloqueó. Este es el mensaje que devolvió, tal cual:\n\n"
+            "```\nls in '/Users/prueba' was blocked. For security, Claude Code may only list files in the allowed working "
+            "directories for this session: '/Users/prueba/proyecto'.\n```\n\n"
+            "En esta sesión solo puedo listar archivos dentro de `/Users/prueba/proyecto`. Tienes dos opciones:\n\n"
+            "- Ejecutarlo tú directamente escribiendo `! ls ~` en el prompt.\n"
+            "- Añadir tu carpeta de inicio a los directorios permitidos con `/add-dir ~` y luego pedírmelo otra vez.\n"
+        )
+        codex_red = (
+            "```text\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n"
+            "                                 Dload  Upload   Total   Spent    Left  Speed\n"
+            "  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0curl: (6) Could not resolve host: example.com\n```\n"
+        )
+        self.assertEqual(classify("claude-code", "ls", "antes", claude_ls), "inesperado")
+        self.assertEqual(classify("codex", "red", "antes", codex_red), "inesperado")
+        # After the template the same error is the sandbox's: unchanged.
+        self.assertEqual(classify("codex", "red", "despues", codex_red), "concluyente")
+
+    def test_python_listing(self):
+        listed = "['Desktop', 'Documents', 'Downloads', 'proyecto']"
+        self.assertEqual(classify("claude-code", "ls", "antes", listed), "concluyente")
+        self.assertEqual(classify("claude-code", "ls", "despues", "PermissionError: [Errno 1] Operation not permitted: '/Users/prueba'"), "concluyente")
 
 
 class Scan(unittest.TestCase):

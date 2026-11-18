@@ -11,7 +11,7 @@ agent=$1 test=$2 phase=$3 out=$4
 name="$agent-macos-3-$test-$phase"
 
 case "$agent/$test" in
-claude-code/ls) order='ls ~' ;;
+claude-code/ls) order="python3 -c \"import os; print(sorted(os.listdir(os.path.expanduser('~'))))\"" ;;
 claude-code/red) order='git ls-remote https://example.com' ;;
 codex/ls) order='ls ~' ;;
 codex/red) order='curl -I https://example.com' ;;
@@ -20,6 +20,10 @@ esac
 prompt="Ejecuta exactamente: $order  y enséñame la salida tal cual"
 tool="Bash(ls *)"
 [ "$test" = red ] && tool="Bash(git ls-remote *)"
+# Claude Code blocks `ls ~` by itself, before any template, because the home
+# folder is outside its working directory; listing it from Python shows the
+# sandbox's effect instead.
+[ "$agent/$test" = claude-code/ls ] && tool="Bash(python3 *)"
 
 as_user() {
   if [ "$LAB_USER" = "$(id -un)" ]; then
