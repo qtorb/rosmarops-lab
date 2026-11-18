@@ -57,10 +57,10 @@ jobs:
           go install github.com/charmbracelet/freeze@v0.2.2
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           if [ "${{ matrix.agent }}" = claude-code ]; then
-            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.311
+            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.327
             claude --version
           else
-            npm install -g @openai/codex@0.169.0
+            npm install -g @openai/codex@0.170.0
           fi
 
       - name: Prepare the test account (CTO-61 §2.0)
@@ -70,6 +70,21 @@ jobs:
         run: |
           mkdir -p "$OUT"
           lab/meta.sh "${{ matrix.agent }}" "$OUT" "$WEB_COMMIT"
+
+      - name: Claude Code's ls order runs as the test account (no agent, no key)
+        if: matrix.agent == 'claude-code'
+        run: |
+          set -eu
+          cd "$LAB_HOME/proyecto"
+          if [ "$LAB_USER" = "$(id -un)" ]; then
+            out=$(HOME="$LAB_HOME" python3 -c "import os; print(sorted(os.listdir(os.path.expanduser('~'))))")
+          else
+            out=$(sudo -u "$LAB_USER" -H /bin/sh -c 'cd "$HOME/proyecto" && exec python3 -c "import os; print(sorted(os.listdir(os.path.expanduser('"'"'~'"'"'))))"')
+          fi
+          echo "$out"
+          for w in Desktop Documents Downloads proyecto; do
+            case "$out" in *"'$w'"*) ;; *) echo "::error::the order does not list $w as $LAB_USER"; exit 1 ;; esac
+          done
 
       - name: Tests before the template (not called)
         run: lab/tests.sh "${{ matrix.agent }}" antes "$OUT"

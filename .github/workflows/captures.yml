@@ -58,10 +58,10 @@ jobs:
           go install github.com/charmbracelet/freeze@v0.2.2
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           if [ "${{ matrix.agent }}" = claude-code ]; then
-            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.311
+            npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@2.1.327
             claude --version
           else
-            npm install -g @openai/codex@0.169.0
+            npm install -g @openai/codex@0.170.0
           fi
 
       - name: Prepare the test account (CTO-61 §2.0)

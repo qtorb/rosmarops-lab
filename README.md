@@ -11,9 +11,8 @@ For each agent, as a test account `prueba` (or, if `sysadminctl` cannot create
 it, the runner account with `HOME` in a temporary `prueba` folder; the
 manifest says which):
 
-1. **Before the template:** two tests, `ls ~` and a network test
-   (`git ls-remote https://example.com` in Claude Code, `curl -I
-   https://example.com` in Codex).
+1. **Before the template:** two tests, a listing of the home folder and a
+   network test (the orders are in the table below).
 2. **Step 1:** the template, written from the `templates.macos` field of
    `observatory/data/agents/<agent>.json` in qtorb/rosmarops-web at the commit
    given to the run. The capture is each file's content with its path.
@@ -31,8 +30,37 @@ stops the run and names only the file.
 The results go to a release `lab-AAAAMMDD` with the PNGs, the reviewed texts,
 `meta.json` per agent and `manifest.json` (agent, step, test, before/after,
 command, result, versions, runner image, UTC date, web commit and the SHA-256
-of every file). Results: `concluyente` (the error is the sandbox's),
-`no_concluyente`, `inesperado` (the order worked after the template).
+of every file).
+
+## The orders
+
+Each test asks the agent to run one order exactly and show its output:
+
+| Agent | Test | Order | Allowed tool (Claude Code) |
+|---|---|---|---|
+| Claude Code | `ls` | `python3 -c "import os; print(sorted(os.listdir(os.path.expanduser('~'))))"` | `Bash(python3 *)` |
+| Claude Code | `red` | `git ls-remote https://example.com` | `Bash(git ls-remote *)` |
+| Codex | `ls` | `ls ~` | — |
+| Codex | `red` | `curl -I https://example.com` | — |
+
+Claude Code's `ls` test lists the home folder from Python, because Claude
+Code refuses `ls ~` by itself, before any template: the home folder is outside
+its working directory. A plain `ls ~` would show that refusal both before and
+after, and nothing of the sandbox.
+
+## How a result is read
+
+The same fixed expressions read every answer (`lab/classify.py`):
+
+| | The order worked | The order failed | Anything else (not run, another answer) |
+|---|---|---|---|
+| **Before the template** | `concluyente`: the starting point is seen | `inesperado`: it was expected to work before the template, so before and after cannot show what the template changes | `no_concluyente` |
+| **After the template** | `inesperado`: the template did not stop it | `concluyente`: the error is the sandbox's | `no_concluyente`, also for a permission prompt or a missing folder |
+
+Before the template, «worked» means that `ls` lists the four entries of the
+test account (`Desktop`, `Documents`, `Downloads`, `proyecto`) and that the
+network test reaches `example.com` (an HTTP answer or error, not a connection
+error).
 
 ## Workflows
 
