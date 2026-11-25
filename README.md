@@ -69,6 +69,7 @@ error).
 | `captures.yml` | `workflow_dispatch`, `main` only | `lab-captures` (Albert approves): `ANTHROPIC_API_KEY`, `CODEX_API_KEY` |
 | `dry-run.yml` | `workflow_dispatch` | none: the agents are installed but never called |
 | `checks.yml` | pull requests | none |
+| `minim-paperclip.yml` | `workflow_dispatch` | none: no environment, no secret, `permissions: {}` |
 
 Spending is capped outside this repository: a separate Anthropic organisation
 with 10 USD prepaid credit and no auto-reload, and an OpenAI project with a 10
@@ -79,3 +80,118 @@ USD hard limit. Claude Code calls also carry `--max-budget-usd 0.25`.
 - The keys exist only as secrets of the `lab-captures` environment.
 - `main` changes only through a pull request reviewed by Albert.
 - Nothing from here reaches the website until its own pull request is merged.
+
+## Minimum of control: Paperclip M6
+
+A separate test (BV-301), unrelated to the captures above. It answers one
+criterion of RosmarOps's «minimum of control» for orchestrators, M6: *an
+agent, and every run at once, can be stopped from the product.* Paperclip
+documents how to pause one agent, but not how to stop everything at once.
+Its code has one action that should: setting the company's status to
+`paused` (`PATCH /api/companies/{id}`). This test checks what that action
+does.
+
+It uses no key and calls no model. The two agents use Paperclip's `process`
+adapter and only run `sleep 600`. The workflow has no environment, no secret
+and `permissions: {}`.
+
+### What it installs
+
+- Node 24.11, with `actions/setup-node`. Paperclip asks for Node `>=24.11.0`.
+- `paperclipai@2026.1117.0` from npm, the release tagged `v2026.1117.0`
+  (commit `c0f132898d2a2677312d8c72096187b27a3d9a38`). It is installed from
+  its tarball, whose SHA-256 goes into the result.
+- Nothing else. Paperclip brings its own embedded PostgreSQL.
+
+### The steps
+
+`lab/minim/paperclip.sh` records each step as `ok` or `fail`. The first
+failed step ends the test.
+
+| Step | What is checked |
+|---|---|
+| `install` | `npm pack paperclipai@2026.1117.0`, then `npm install` of that tarball into a temporary folder; the installed version is 2026.1117.0 |
+| `start` | Paperclip starts with an empty environment (below) and `GET /api/health` answers 200 |
+| `company` | `POST /api/companies` creates a made-up company |
+| `agents` | `POST /api/companies/{id}/agents`, twice: adapter `process`, command `sleep 600` |
+| `wake` | `POST /api/agents/{id}/heartbeat/invoke` for both |
+| `two_running` | the company has two runs `running` (`GET /api/companies/{id}/heartbeat-runs`) and two `sleep 600` processes are alive |
+| `pause` | one call: `PATCH /api/companies/{id}` with `{"status":"paused"}` |
+| `none_running_after_wait` | after 60 seconds, no run is `running` and no `sleep 600` is left |
+
+The result is `yes` only if every step is `ok`, and `no` otherwise.
+`lab/minim/result.py` writes it to `result.json`, with:
+
+- the steps;
+- the Paperclip and Node versions;
+- the package's SHA-256;
+- the UTC date and the runner image;
+- the hosts npm fetched from;
+- two counts of Paperclip's connections to other machines.
+
+Every value is checked against a fixed pattern, so no raw output can reach
+the file. `result.json` and its SHA-256 are kept as a 7-day artifact; there
+is no release.
+
+The job's log is public. It shows only the step ids, `ok`/`fail` and the
+result. Paperclip's output, npm's output and the API's answers stay in a
+temporary folder that is neither printed nor uploaded.
+
+### The recipe, to repeat it elsewhere
+
+```sh
+# 1. Node 24.11 or later, then the exact version from its tarball.
+npm pack paperclipai@2026.1117.0
+npm install --prefix ./pc --no-audit --no-fund ./paperclipai-2026.1117.0.tgz
+
+# 2. Start it with an empty, explicit environment. --yes takes the Quickstart
+#    defaults (local_trusted: loopback only, no login, port 3100) and starts
+#    the server in the foreground.
+mkdir -p ./home
+setsid env -i \
+  HOME="$PWD/home" \
+  PATH="$PWD/pc/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
+  LANG=C.UTF-8 \
+  PAPERCLIP_TELEMETRY_DISABLED=1 \
+  DO_NOT_TRACK=1 \
+  PAPERCLIP_UPDATE_CHECK=0 \
+  paperclipai onboard --yes --no-install-service </dev/null &
+
+# 3. In local_trusted mode, calls from this machine act as the local board,
+#    with no login and no key.
+curl -s http://127.0.0.1:3100/api/health
+```
+
+Three of those variables were not in the plan. They are needed because the
+environment is empty:
+
+- **`PAPERCLIP_TELEMETRY_DISABLED=1` and `DO_NOT_TRACK=1`.** Paperclip sends
+  anonymous telemetry by default, to `telemetry.paperclip.ing`
+  (`packages/shared/src/telemetry/client.ts`). It turns telemetry off by
+  itself only when it sees `CI`, `GITHUB_ACTIONS` or a similar variable
+  (`packages/shared/src/telemetry/config.ts`), and `env -i` removes those.
+  Either variable turns it off by name.
+- **`PAPERCLIP_UPDATE_CHECK=0`.** It stops the command line from asking
+  `registry.npmjs.org` for a newer version (`cli/src/update-notice.ts`).
+
+Why the environment is empty: Paperclip gives each agent its own environment,
+minus its `PAPERCLIP_*` variables. Its `process` adapter builds the child's
+environment from `sanitizeInheritedPaperclipEnv(process.env)`
+(`server/src/adapters/process/execute.ts`). Starting it with `env -i` means no
+variable of the job can reach an agent.
+
+### Where it connects
+
+No network limit is set in this job: it holds no secret and calls no model.
+What it records, with no extra tool:
+
+- **While installing:** the host names in npm's http log (`install_hosts`).
+  Only npm's own requests are there; a download made by a package's
+  install script would not show.
+- **While running:** how many established TCP connections Paperclip's
+  `node` and `postgres` processes have to an address that is not this
+  machine. It is sampled twice, while the two agents run and after the
+  pause. `ss` gives addresses, not names, so these are counts only.
+
+Not yet observed: this section is completed with the first run's
+`result.json`.

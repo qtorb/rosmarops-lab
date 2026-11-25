@@ -1,0 +1,48 @@
+name: Minimum of control, Paperclip M6
+
+# BV-301 (from the reading BV-300 §1, signed by Albert): does one action stop
+# every run of Paperclip at once? Two `process` agents that only `sleep 600`,
+# then PATCH /api/companies/{id} with status "paused", then check that no run
+# and no process is left.
+# - Only by hand (workflow_dispatch). No environment, no secret, no key and
+#   no model: nothing here can spend or reach an account.
+# - permissions: {}: the job's token can do nothing on the repository.
+# - Paperclip runs with an empty, explicit environment (lab/minim/paperclip.sh).
+# - The log is public: it shows only the steps and the result. The only file
+#   kept is result.json (and its SHA-256), as a 7-day artifact. No release.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lab-minim-paperclip
+  cancel-in-progress: false
+
+jobs:
+  m6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.11"
+
+      - name: Paperclip M6 (stop every run at once)
+        run: lab/minim/paperclip.sh "$OUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: minim-paperclip-m6
+          path: |
+            out/result.json
+            out/result.json.sha256
+          retention-days: 7
+          if-no-files-found: error

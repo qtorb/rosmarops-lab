@@ -2,6 +2,8 @@
 """BV-250: checks of the fixed expressions (classify.py) and the key review
 (scan.py), with made-up outputs. Run: python3 lab/test_lab.py"""
 
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -93,6 +95,93 @@ class Scan(unittest.TestCase):
         env = dict(os.environ, CODEX_API_KEY="zz-made-up-value-123456")
         self.assertEqual(self.scan("x zz-made-up-value-123456 y", env).returncode, 1)
         self.assertEqual(self.scan("task-list and desk-top are fine", env).returncode, 0)
+
+
+M6_STEPS = ["install", "start", "company", "agents", "wake", "two_running", "pause", "none_running_after_wait"]
+M6_FACTS = [
+    "product=paperclipai",
+    "product_version=2026.1117.0",
+    "node_version=v24.11.1",
+    "package_sha256=" + "ab" * 32,
+    "runner_image=ubuntu24-20261123.1",
+    "wait_seconds=60",
+    "install_hosts=registry.npmjs.org",
+    "outside_connections_running=0",
+    "outside_connections_after=0",
+    "utc=2026-11-25T18:00:00Z",
+]
+
+
+class MinimResult(unittest.TestCase):
+    """BV-301: result.json of the minimum-of-control tests (minim/result.py)."""
+
+    def result(self, steps, facts=M6_FACTS, criterion="M6"):
+        d = tempfile.mkdtemp()
+        with open(os.path.join(d, "steps.txt"), "w") as f:
+            f.write("".join(s + "\n" for s in steps))
+        with open(os.path.join(d, "facts.txt"), "w") as f:
+            f.write("".join(x + "\n" for x in facts))
+        r = run(os.path.join("minim", "result.py"), criterion,
+                os.path.join(d, "steps.txt"), os.path.join(d, "facts.txt"), d)
+        path = os.path.join(d, "result.json")
+        doc = json.load(open(path)) if os.path.exists(path) else None
+        return r, doc, d
+
+    def test_every_step_ok_is_yes(self):
+        r, doc, d = self.result([s + " ok" for s in M6_STEPS])
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), "M6: yes")
+        self.assertEqual(doc["result"], "yes")
+        self.assertEqual(doc["criterion"], "M6")
+        self.assertEqual(doc["how"], "test")
+        self.assertEqual(doc["product_version"], "2026.1117.0")
+        self.assertEqual(doc["install_hosts"], ["registry.npmjs.org"])
+        self.assertEqual(doc["wait_seconds"], 60)
+        data = open(os.path.join(d, "result.json"), "rb").read()
+        self.assertEqual(open(os.path.join(d, "result.json.sha256")).read().split()[0],
+                         hashlib.sha256(data).hexdigest())
+
+    def test_a_failed_step_is_no(self):
+        steps = [s + " ok" for s in M6_STEPS[:-1]] + [M6_STEPS[-1] + " fail"]
+        r, doc, _ = self.result(steps)
+        self.assertEqual(r.stdout.strip(), "M6: no")
+        self.assertEqual(doc["result"], "no")
+
+    def test_stopped_early_is_no(self):
+        # paperclip.sh stops at the first failed step: the rest are missing.
+        r, doc, _ = self.result(["install ok", "start fail"])
+        self.assertEqual(doc["result"], "no")
+        self.assertEqual([s["id"] for s in doc["steps"]], ["install", "start"])
+
+    def test_steps_out_of_order_or_twice_are_no(self):
+        steps = [s + " ok" for s in M6_STEPS]
+        swapped = steps[:]
+        swapped[6], swapped[7] = swapped[7], swapped[6]
+        self.assertEqual(self.result(swapped)[1]["result"], "no")
+        self.assertEqual(self.result(steps + ["pause ok"])[1]["result"], "no")
+
+    def test_unknown_step_or_text_writes_nothing(self):
+        for line in ("reboot ok", "pause ok because it said so", "pause maybe"):
+            r, doc, _ = self.result([line])
+            self.assertEqual(r.returncode, 1, line)
+            self.assertIsNone(doc, line)
+
+    def test_a_fact_that_is_not_a_closed_value_writes_nothing(self):
+        # Raw output, an address or a key must never reach result.json.
+        for bad in ("install_hosts=https://registry.npmjs.org/paperclipai",
+                    "product_version=2026.1117.0 (Paperclip says hi)",
+                    "package_sha256=nothex",
+                    "comment=anything",
+                    "outside_connections_after=10.0.0.1"):
+            facts = [f for f in M6_FACTS if not f.startswith(bad.split("=")[0] + "=")] + [bad]
+            r, doc, _ = self.result([s + " ok" for s in M6_STEPS], facts)
+            self.assertEqual(r.returncode, 1, bad)
+            self.assertIsNone(doc, bad)
+
+    def test_unknown_criterion_writes_nothing(self):
+        r, doc, _ = self.result(["install ok"], criterion="M9")
+        self.assertEqual(r.returncode, 1)
+        self.assertIsNone(doc)
 
 
 if __name__ == "__main__":
