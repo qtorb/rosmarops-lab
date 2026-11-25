@@ -113,7 +113,7 @@ failed step ends the test.
 | `install` | `npm pack paperclipai@2026.1117.0`, then `npm install` of that tarball into a temporary folder; the installed version is 2026.1117.0 |
 | `start` | Paperclip starts with an empty environment (below) and `GET /api/health` answers 200 |
 | `company` | `POST /api/companies` creates a made-up company |
-| `agents` | `POST /api/companies/{id}/agents`, twice: adapter `process`, command `sleep 600` |
+| `agents` | `POST /api/companies/{id}/agents`, twice: adapter `process`, `command` `sleep`, `args` `["600"]` |
 | `wake` | `POST /api/agents/{id}/heartbeat/invoke` for both |
 | `two_running` | the company has two runs `running` (`GET /api/companies/{id}/heartbeat-runs`) and two `sleep 600` processes are alive |
 | `pause` | one call: `PATCH /api/companies/{id}` with `{"status":"paused"}` |
@@ -123,6 +123,8 @@ The result is `yes` only if every step is `ok`, and `no` otherwise.
 `lab/minim/result.py` writes it to `result.json`, with:
 
 - the steps;
+- if the two agents did not both start, how many runs were `running` and how
+  many `sleep 600` processes were alive at the last look;
 - the Paperclip and Node versions;
 - the package's SHA-256;
 - the UTC date and the runner image;
@@ -173,6 +175,15 @@ environment is empty:
   Either variable turns it off by name.
 - **`PAPERCLIP_UPDATE_CHECK=0`.** It stops the command line from asking
   `registry.npmjs.org` for a newer version (`cli/src/update-notice.ts`).
+
+One more fact found on the first run (25-11-2026): the `process` adapter runs
+`command` with `args` and **no shell** (`spawn` with `shell: false`,
+`packages/adapter-utils/src/server-utils.ts`). A `command` of `sleep 600`
+looks for a program named «sleep 600» and the run fails at once. The
+adapter's page calls `command` a «Shell command to execute» and shows
+`"command": "python3 /path/to/agent.py"` (`docs/adapters/process.md`), which
+would fail the same way on Linux. The test uses `"command": "sleep",
+"args": ["600"]`.
 
 Why the environment is empty: Paperclip gives each agent its own environment,
 minus its `PAPERCLIP_*` variables. Its `process` adapter builds the child's
