@@ -204,5 +204,33 @@ What it records, with no extra tool:
   machine. It is sampled twice, while the two agents run and after the
   pause. `ss` gives addresses, not names, so these are counts only.
 
-Not yet observed: this section is completed with the first run's
-`result.json`.
+Observed in run
+[45681882389](https://github.com/qtorb/rosmarops-lab/actions/runs/45681882389),
+the run with result `M6: yes`:
+
+| Field | Value |
+|---|---|
+| `install_hosts` | `registry.npmjs.org` only |
+| `outside_connections_running` | 0 |
+| `outside_connections_after` | 0 |
+| `runs_running_seen` / `sleepers_seen` | 2 / 2 |
+| `wait_seconds` | 60 |
+| `product_version` | 2026.1117.0 |
+| `node_version` | v24.11.1 |
+| `runner_image` | ubuntu26-20261116.202.1 |
+| `utc` | 2026-11-25T19:09:25Z |
+| `package_sha256` | `1e4600b2c6b0ae360a152cac0be734122e2b6a00bed633db93b9eae990adc6fc` |
+
+What these facts cover:
+
+- **Telemetry was off on purpose.** Paperclip started with
+  `PAPERCLIP_TELEMETRY_DISABLED=1`, `DO_NOT_TRACK=1` and
+  `PAPERCLIP_UPDATE_CHECK=0` (see the recipe above). The run therefore says
+  nothing about what Paperclip sends with its factory telemetry on.
+- **The agents were stand-ins.** They only ran `sleep 600` and called no
+  model. The run says nothing about what goes to the network with real
+  agents.
+- **The install hosts are npm's own requests.** Nothing downloaded by a
+  package's install script would show there.
+- **The two connection counts are snapshots.** Each was taken once with
+  `ss`, at the two moments described above, not watched for the whole run.
