@@ -106,6 +106,8 @@ M6_FACTS = [
     "runner_image=ubuntu24-20261123.1",
     "wait_seconds=60",
     "install_hosts=registry.npmjs.org",
+    "runs_running_seen=2",
+    "sleepers_seen=2",
     "outside_connections_running=0",
     "outside_connections_after=0",
     "utc=2026-11-25T18:00:00Z",
@@ -137,6 +139,7 @@ class MinimResult(unittest.TestCase):
         self.assertEqual(doc["product_version"], "2026.1117.0")
         self.assertEqual(doc["install_hosts"], ["registry.npmjs.org"])
         self.assertEqual(doc["wait_seconds"], 60)
+        self.assertEqual(doc["sleepers_seen"], 2)
         data = open(os.path.join(d, "result.json"), "rb").read()
         self.assertEqual(open(os.path.join(d, "result.json.sha256")).read().split()[0],
                          hashlib.sha256(data).hexdigest())

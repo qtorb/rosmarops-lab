@@ -45,6 +45,8 @@ FACTS = {
     "runner_image": re.compile(r"[0-9A-Za-z._-]{1,60}"),
     "wait_seconds": re.compile(r"[0-9]{1,4}"),
     "install_hosts": re.compile(rf"({HOST})?(,{HOST})*"),
+    "runs_running_seen": re.compile(r"[0-9]{1,5}"),
+    "sleepers_seen": re.compile(r"[0-9]{1,5}"),
     "outside_connections_running": re.compile(r"[0-9]{1,5}"),
     "outside_connections_after": re.compile(r"[0-9]{1,5}"),
     "utc": re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"),
@@ -107,7 +109,8 @@ def build(criterion, steps_path, facts_path):
             value = facts[key]
             if key == "install_hosts":
                 value = sorted(set(filter(None, value.split(","))))
-            elif key in ("wait_seconds", "outside_connections_running", "outside_connections_after"):
+            elif key in ("wait_seconds", "runs_running_seen", "sleepers_seen",
+                         "outside_connections_running", "outside_connections_after"):
                 value = int(value)
             doc[key] = value
     return doc

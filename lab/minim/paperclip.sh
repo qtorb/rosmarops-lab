@@ -84,7 +84,8 @@ print(sum(1 for r in runs if isinstance(r, dict) and r.get("status") == "running
 
 sleepers() {
   local n
-  n=$(pgrep -fxc 'sleep 600' 2>/dev/null)
+  # The adapter spawns the resolved path (/usr/bin/sleep 600), with no shell.
+  n=$(pgrep -fxc '(.*/)?sleep 600' 2>/dev/null)
   echo "${n:-0}"
 }
 
@@ -162,10 +163,12 @@ company=$(field id)
 step company ok
 
 # 4. Two agents with the `process` adapter that only sleep. No model, no key.
+#    The adapter runs `command` with `args` and no shell: «sleep 600» as one
+#    command would look for a program of that name and fail.
 agents=()
 for n in 1 2; do
   code=$(api POST "/companies/$company/agents" \
-    "{\"name\":\"Sleeper $n\",\"adapterType\":\"process\",\"adapterConfig\":{\"command\":\"sleep 600\",\"timeoutSec\":900}}")
+    "{\"name\":\"Sleeper $n\",\"adapterType\":\"process\",\"adapterConfig\":{\"command\":\"sleep\",\"args\":[\"600\"],\"timeoutSec\":900}}")
   case "$code" in 200 | 201) ;; *) fail agents ;; esac
   id=$(field id)
   [ -n "$id" ] || fail agents
@@ -182,9 +185,14 @@ step wake ok
 # 6. Two runs `running` and two `sleep 600` processes alive.
 ok=0
 for _ in $(seq 1 30); do
-  if [ "$(running_runs "$company")" = 2 ] && [ "$(sleepers)" = 2 ]; then ok=1; break; fi
+  runs_seen=$(running_runs "$company")
+  sleepers_seen=$(sleepers)
+  if [ "$runs_seen" = 2 ] && [ "$sleepers_seen" = 2 ]; then ok=1; break; fi
   sleep 2
 done
+# Two counts only, so a failure here says which half failed.
+[ "$runs_seen" -ge 0 ] 2>/dev/null && fact runs_running_seen "$runs_seen"
+fact sleepers_seen "$sleepers_seen"
 fact outside_connections_running "$(outside_connections)"
 [ "$ok" = 1 ] || fail two_running
 step two_running ok
