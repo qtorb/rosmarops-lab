@@ -222,6 +222,14 @@ class HermesH1Result(MinimResult):
         r, doc, _ = self.result(["install fail"], H1_FACTS + ["install_failed_at=pip: error text"], "H1")
         self.assertIsNone(doc)
 
+    def test_the_missing_module_is_a_name(self):
+        steps = ["install ok", "import fail"]
+        ok = H1_FACTS + ["import_error=ModuleNotFoundError", "import_missing_module=ruamel.yaml"]
+        r, doc, _ = self.result(steps, ok, "H1")
+        self.assertEqual((doc["result"], doc["import_missing_module"]), ("no", "ruamel.yaml"))
+        r, doc, _ = self.result(steps, H1_FACTS + ["import_missing_module=No module named 'x'"], "H1")
+        self.assertIsNone(doc)
+
     def test_an_image_that_is_not_a_name_writes_nothing(self):
         facts = [f for f in H1_FACTS if not f.startswith("docker_image=")] + ["docker_image=python:3.12 slim; rm -rf /"]
         r, doc, _ = self.result([s + " ok" for s in H1_STEPS], facts, "H1")

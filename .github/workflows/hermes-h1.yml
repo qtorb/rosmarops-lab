@@ -30,11 +30,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # The Python the install was checked with (3.13), not whatever the
-      # runner image ships.
+      # Hermes's dependencies at the tested commit are declared for Python
+      # 3.14 only; uv installs them from its lock (lab/minim/hermes_h1.sh).
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Hermes Agent H1 (memory and skills with the terminal in Docker)
         run: lab/minim/hermes_h1.sh "$OUT"

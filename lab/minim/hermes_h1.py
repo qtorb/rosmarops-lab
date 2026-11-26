@@ -22,17 +22,22 @@ The steps, each recorded as "<id> ok|fail" in STEPS_FILE:
 The job's log is public: only the step ids and ok/fail are printed. Any error
 goes to ERRORS_FILE, which is neither printed nor uploaded.
 
-usage: hermes_h1.py HERMES_REPO STEPS_FILE ERRORS_FILE
+If the import fails, FACTS_FILE gets import_error (the exception's type)
+and, for a missing module, import_missing_module (its name): closed values,
+checked here and again by result.py, never raw output.
+
+usage: hermes_h1.py HERMES_REPO STEPS_FILE ERRORS_FILE FACTS_FILE
 """
 
 import json
 import os
+import re
 import pathlib
 import sys
 import traceback
 import uuid
 
-repo, steps_path, errors_path = sys.argv[1:4]
+repo, steps_path, errors_path, facts_path = sys.argv[1:5]
 home = pathlib.Path(os.environ["HERMES_HOME"])
 sys.path.insert(0, repo)
 
@@ -50,6 +55,13 @@ def note(step):
         f.write(f"--- {step}\n{traceback.format_exc()}\n")
 
 
+def fact(key, value, pattern):
+    """A closed fact for result.json: written only if it matches pattern."""
+    if isinstance(value, str) and re.fullmatch(pattern, value):
+        with open(facts_path, "a", encoding="utf-8") as f:
+            f.write(f"{key}={value}\n")
+
+
 def success(raw):
     """A tool's JSON answer that is not an error."""
     try:
@@ -64,8 +76,11 @@ try:
     from tools import memory_tool as mt
 
     ok = True
-except Exception:
+except Exception as e:
     note("import")
+    fact("import_error", type(e).__name__, r"[A-Za-z][A-Za-z0-9_]{0,59}")
+    if isinstance(e, ModuleNotFoundError):
+        fact("import_missing_module", e.name, r"[A-Za-z_][A-Za-z0-9_.]{0,99}")
     ok = False
 record("import", ok)
 
