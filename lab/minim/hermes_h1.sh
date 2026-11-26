@@ -46,7 +46,9 @@ if ! git clone -q https://github.com/NousResearch/hermes-agent "$work/hermes" >"
   fail install
 fi
 python3 -m venv "$work/venv" || fail install
-if ! "$work/venv/bin/pip" install -q "$work/hermes" >"$work/pip.log" 2>&1; then
+# Hermes refuses a wheel build («Building wheels or sdists for hermes-agent is
+# not supported»): its own advice for a checkout is an editable install.
+if ! "$work/venv/bin/pip" install -q -e "$work/hermes" >"$work/pip.log" 2>&1; then
   fail install
 fi
 docker pull -q "$image" >"$work/docker.log" 2>&1 || fail install
