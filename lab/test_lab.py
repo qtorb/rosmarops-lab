@@ -187,5 +187,41 @@ class MinimResult(unittest.TestCase):
         self.assertIsNone(doc)
 
 
+H1_STEPS = ["install", "import", "control_in_container", "memory_on_host", "skill_on_host", "skill_script_on_host"]
+H1_FACTS = [
+    "product=hermes-agent",
+    "source_commit=" + "02afb7489e1099a8f21cd307b96b9a648dfb9243",
+    "docker_image=python:3.12-slim",
+    "python_version=3.12.3",
+    "runner_image=ubuntu24-20261123.1",
+    "utc=2026-11-26T12:00:00Z",
+]
+
+
+class HermesH1Result(MinimResult):
+    """BV-310 H1: the same result.py, criterion H1."""
+
+    def test_every_step_ok_is_yes(self):
+        r, doc, _ = self.result([s + " ok" for s in H1_STEPS], H1_FACTS, "H1")
+        self.assertEqual(r.stdout.strip(), "H1: yes")
+        self.assertEqual(doc["source_commit"], "02afb7489e1099a8f21cd307b96b9a648dfb9243")
+        self.assertEqual(doc["docker_image"], "python:3.12-slim")
+
+    def test_a_control_that_fails_is_no(self):
+        # The file tool did not stay in the container: the test proves nothing.
+        r, doc, _ = self.result(["install ok", "import ok", "control_in_container fail"], H1_FACTS, "H1")
+        self.assertEqual(doc["result"], "no")
+
+    def test_memory_not_on_the_computer_is_no(self):
+        steps = ["install ok", "import ok", "control_in_container ok", "memory_on_host fail"]
+        self.assertEqual(self.result(steps, H1_FACTS, "H1")[1]["result"], "no")
+
+    def test_an_image_that_is_not_a_name_writes_nothing(self):
+        facts = [f for f in H1_FACTS if not f.startswith("docker_image=")] + ["docker_image=python:3.12 slim; rm -rf /"]
+        r, doc, _ = self.result([s + " ok" for s in H1_STEPS], facts, "H1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIsNone(doc)
+
+
 if __name__ == "__main__":
     unittest.main()
