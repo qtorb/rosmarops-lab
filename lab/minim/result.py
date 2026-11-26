@@ -54,6 +54,7 @@ FACTS = {
     "node_version": re.compile(r"v?[0-9]+\.[0-9]+\.[0-9]+"),
     "python_version": re.compile(r"[0-9]+\.[0-9]+\.[0-9]+"),
     "source_commit": re.compile(r"[0-9a-f]{40}"),
+    "install_failed_at": re.compile(r"clone|venv|pip|image"),
     "docker_image": re.compile(r"[a-z0-9./_-]{1,60}(:[A-Za-z0-9._-]{1,40})?"),
     "package_sha256": re.compile(r"[0-9a-f]{64}"),
     "runner_image": re.compile(r"[0-9A-Za-z._-]{1,60}"),

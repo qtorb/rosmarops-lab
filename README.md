@@ -265,7 +265,7 @@ folder whose `config.yaml` sets `terminal.backend: docker` and the image),
 
 | Step | What is checked |
 |---|---|
-| `install` | the clone at the commit, `pip install` of it, `docker pull` of the image |
+| `install` | the clone at the commit, `pip install -e` of it with Python 3.13 (`actions/setup-python`), `docker pull` of the image; if it fails, `install_failed_at` says where (`clone`, `venv`, `pip` or `image`) |
 | `import` | Hermes's tool modules load |
 | `control_in_container` | a `write_file` to a fresh `/tmp` path, through Hermes's own dispatch (`model_tools.handle_function_call`), can be read back with `read_file` and is **not** on the computer: the container is the one in use. If this step fails, the test proves nothing |
 | `memory_on_host` | `memory` `add`, with the on-disk store as the agent loop uses it, leaves a non-empty `.md` in `<HERMES_HOME>/memories` on the computer |
