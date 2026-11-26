@@ -1,0 +1,43 @@
+name: Hermes Agent in a container, memory and skills (H1)
+
+# BV-310 H1 (from BV-305 and BV-309): with terminal.backend: docker, do Hermes
+# Agent's memory and skill_manage tools still write on the computer? A control
+# write_file must stay in the container; then memory add, skill_manage create
+# and skill_manage write_file must leave their files on the computer.
+# - Only by hand (workflow_dispatch). No environment, no secret, no key and
+#   no model: the tools are called directly.
+# - permissions: {}: the job's token can do nothing on the repository.
+# - The log is public: it shows only the steps and the result. The only file
+#   kept is result.json (and its SHA-256), as a 7-day artifact. No release.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lab-hermes-h1
+  cancel-in-progress: false
+
+jobs:
+  h1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OUT: ${{ github.workspace }}/out
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Hermes Agent H1 (memory and skills with the terminal in Docker)
+        run: lab/minim/hermes_h1.sh "$OUT"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hermes-h1
+          path: |
+            out/result.json
+            out/result.json.sha256
+          retention-days: 7
+          if-no-files-found: error

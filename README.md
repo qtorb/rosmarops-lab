@@ -70,6 +70,7 @@ error).
 | `dry-run.yml` | `workflow_dispatch` | none: the agents are installed but never called |
 | `checks.yml` | pull requests | none |
 | `minim-paperclip.yml` | `workflow_dispatch` | none: no environment, no secret, `permissions: {}` |
+| `hermes-h1.yml` | `workflow_dispatch` | none: no environment, no secret, `permissions: {}` |
 
 Spending is capped outside this repository: a separate Anthropic organisation
 with 10 USD prepaid credit and no auto-reload, and an OpenAI project with a 10
@@ -234,3 +235,45 @@ What these facts cover:
   package's install script would show there.
 - **The two connection counts are snapshots.** Each was taken once with
   `ss`, at the two moments described above, not watched for the whole run.
+
+## Hermes Agent in a container: where its memory and skills are written (H1)
+
+A separate test (BV-310 H1). RosmarOps recommends running Hermes Agent with its
+terminal in a container (`terminal.backend: docker`). Hermes's code suggests
+that two of its tools, `memory` and `skill_manage`, still write in the Hermes
+home on the computer even then. This test checks it before RosmarOps counts
+it.
+
+It uses no key and calls no model: the tools are called directly, the way
+Hermes calls them. The workflow has no environment, no secret and
+`permissions: {}`.
+
+### What it installs
+
+- NousResearch/hermes-agent at commit
+  `02afb7489e1099a8f21cd307b96b9a648dfb9243` (the one read for BV-305), from a
+  git clone, into its own virtual environment with the runner's Python.
+- The image `python:3.12-slim` from Docker Hub, as Hermes's container.
+
+### The steps
+
+`lab/minim/hermes_h1.sh` installs; `lab/minim/hermes_h1.py` runs the tools
+with an empty environment (`env -i`) plus `HOME`, `HERMES_HOME` (a temporary
+folder whose `config.yaml` sets `terminal.backend: docker` and the image),
+`PATH` and `LANG`.
+
+| Step | What is checked |
+|---|---|
+| `install` | the clone at the commit, `pip install` of it, `docker pull` of the image |
+| `import` | Hermes's tool modules load |
+| `control_in_container` | a `write_file` to a fresh `/tmp` path, through Hermes's own dispatch (`model_tools.handle_function_call`), can be read back with `read_file` and is **not** on the computer: the container is the one in use. If this step fails, the test proves nothing |
+| `memory_on_host` | `memory` `add`, with the on-disk store as the agent loop uses it, leaves a non-empty `.md` in `<HERMES_HOME>/memories` on the computer |
+| `skill_on_host` | `skill_manage` `create` leaves `rosmarops-lab-h1/SKILL.md` under `<HERMES_HOME>/skills` on the computer |
+| `skill_script_on_host` | `skill_manage` `write_file` leaves that skill's `scripts/run.py` on the computer |
+
+The result is `yes` only if every step is `ok`: the container is in use and
+the three files are on the computer. `lab/minim/result.py` writes it to
+`result.json` (criterion `H1`), with the Hermes commit, the image, the Python
+version, the UTC date and the runner image. The log shows only the step ids
+and `ok`/`fail`; pip's, Docker's and Hermes's output and any error stay in a
+temporary folder that is neither printed nor uploaded.
