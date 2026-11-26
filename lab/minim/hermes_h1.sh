@@ -36,6 +36,14 @@ fail() {
   finish
 }
 
+# install_fail STAGE: the install step failed at STAGE (a closed value:
+# clone, venv, pip or image), recorded in the result and printed.
+install_fail() {
+  fact install_failed_at "$1"
+  echo "install failed at: $1"
+  fail install
+}
+
 fact product hermes-agent
 fact source_commit "$commit"
 fact docker_image "$image"
@@ -43,15 +51,15 @@ fact docker_image "$image"
 # 1. Hermes at the commit read in BV-305, in its own virtual environment.
 if ! git clone -q https://github.com/NousResearch/hermes-agent "$work/hermes" >"$work/git.log" 2>&1 ||
   ! git -C "$work/hermes" checkout -q "$commit" >>"$work/git.log" 2>&1; then
-  fail install
+  install_fail clone
 fi
-python3 -m venv "$work/venv" || fail install
+python3 -m venv "$work/venv" >"$work/venv.log" 2>&1 || install_fail venv
 # Hermes refuses a wheel build («Building wheels or sdists for hermes-agent is
 # not supported»): its own advice for a checkout is an editable install.
 if ! "$work/venv/bin/pip" install -q -e "$work/hermes" >"$work/pip.log" 2>&1; then
-  fail install
+  install_fail pip
 fi
-docker pull -q "$image" >"$work/docker.log" 2>&1 || fail install
+docker pull -q "$image" >"$work/docker.log" 2>&1 || install_fail image
 fact python_version "$("$work/venv/bin/python" -c 'import platform; print(platform.python_version())')"
 echo "install ok" >>"$steps"
 echo "step install: ok"

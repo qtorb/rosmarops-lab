@@ -216,6 +216,12 @@ class HermesH1Result(MinimResult):
         steps = ["install ok", "import ok", "control_in_container ok", "memory_on_host fail"]
         self.assertEqual(self.result(steps, H1_FACTS, "H1")[1]["result"], "no")
 
+    def test_the_install_stage_is_a_closed_value(self):
+        r, doc, _ = self.result(["install fail"], H1_FACTS + ["install_failed_at=pip"], "H1")
+        self.assertEqual(doc["install_failed_at"], "pip")
+        r, doc, _ = self.result(["install fail"], H1_FACTS + ["install_failed_at=pip: error text"], "H1")
+        self.assertIsNone(doc)
+
     def test_an_image_that_is_not_a_name_writes_nothing(self):
         facts = [f for f in H1_FACTS if not f.startswith("docker_image=")] + ["docker_image=python:3.12 slim; rm -rf /"]
         r, doc, _ = self.result([s + " ok" for s in H1_STEPS], facts, "H1")
