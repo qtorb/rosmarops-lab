@@ -252,8 +252,9 @@ Hermes calls them. The workflow has no environment, no secret and
 
 - NousResearch/hermes-agent at commit
   `02afb7489e1099a8f21cd307b96b9a648dfb9243` (the one read for BV-305), from a
-  git clone, installed editable (`pip install -e`, because Hermes refuses a
-  wheel build) into its own virtual environment with the runner's Python.
+  git clone, installed with `uv sync --frozen` (uv 0.13.10 from PyPI) on
+  Python 3.14: at that commit every dependency is declared for Python 3.14
+  only, and Hermes pins them in its `uv.lock`.
 - The image `python:3.12-slim` from Docker Hub, as Hermes's container.
 
 ### The steps
@@ -265,8 +266,8 @@ folder whose `config.yaml` sets `terminal.backend: docker` and the image),
 
 | Step | What is checked |
 |---|---|
-| `install` | the clone at the commit, `pip install -e` of it with Python 3.13 (`actions/setup-python`), `docker pull` of the image; if it fails, `install_failed_at` says where (`clone`, `venv`, `pip` or `image`) |
-| `import` | Hermes's tool modules load |
+| `install` | the clone at the commit, uv and `uv sync --frozen` with Python 3.14 (`actions/setup-python`), `docker pull` of the image; if it fails, `install_failed_at` says where (`clone`, `venv` for uv, `pip` for the sync, or `image`) |
+| `import` | Hermes's tool modules load; if not, `import_error` and `import_missing_module` say which exception and which module |
 | `control_in_container` | a `write_file` to a fresh `/tmp` path, through Hermes's own dispatch (`model_tools.handle_function_call`), can be read back with `read_file` and is **not** on the computer: the container is the one in use. If this step fails, the test proves nothing |
 | `memory_on_host` | `memory` `add`, with the on-disk store as the agent loop uses it, leaves a non-empty `.md` in `<HERMES_HOME>/memories` on the computer |
 | `skill_on_host` | `skill_manage` `create` leaves `rosmarops-lab-h1/SKILL.md` under `<HERMES_HOME>/skills` on the computer |

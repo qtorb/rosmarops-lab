@@ -55,6 +55,8 @@ FACTS = {
     "python_version": re.compile(r"[0-9]+\.[0-9]+\.[0-9]+"),
     "source_commit": re.compile(r"[0-9a-f]{40}"),
     "install_failed_at": re.compile(r"clone|venv|pip|image"),
+    "import_error": re.compile(r"[A-Za-z][A-Za-z0-9_]{0,59}"),
+    "import_missing_module": re.compile(r"[A-Za-z_][A-Za-z0-9_.]{0,99}"),
     "docker_image": re.compile(r"[a-z0-9./_-]{1,60}(:[A-Za-z0-9._-]{1,40})?"),
     "package_sha256": re.compile(r"[0-9a-f]{64}"),
     "runner_image": re.compile(r"[0-9A-Za-z._-]{1,60}"),
