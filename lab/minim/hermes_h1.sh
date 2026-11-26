@@ -26,7 +26,14 @@ finish() {
   fact runner_image "${ImageOS:-unknown}-${ImageVersion:-unknown}"
   python3 -I "$here/result.py" H1 "$steps" "$facts" "$out"
   docker ps -aq --filter "label=hermes" 2>/dev/null | xargs -r docker rm -f >/dev/null 2>&1
-  rm -rf "$work"
+  # The docker backend's files under the Hermes home belong to the
+  # container's root user: the runner's user cannot remove them. The same
+  # image removes them from inside a container, and anything left is not
+  # reported, so the public log gets no paths.
+  if [ -d "$work/hermes-home/sandboxes" ]; then
+    docker run --rm -v "$work/hermes-home:/h" "$image" rm -rf /h/sandboxes >/dev/null 2>&1
+  fi
+  rm -rf "$work" 2>/dev/null
   exit 0
 }
 
