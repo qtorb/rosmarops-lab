@@ -252,7 +252,8 @@ Hermes calls them. The workflow has no environment, no secret and
 
 - NousResearch/hermes-agent at commit
   `02afb7489e1099a8f21cd307b96b9a648dfb9243` (the one read for BV-305), from a
-  git clone, into its own virtual environment with the runner's Python.
+  git clone, installed editable (`pip install -e`, because Hermes refuses a
+  wheel build) into its own virtual environment with the runner's Python.
 - The image `python:3.12-slim` from Docker Hub, as Hermes's container.
 
 ### The steps
